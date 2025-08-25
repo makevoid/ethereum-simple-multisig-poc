@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(forge init:*)"
+      "Bash(forge init:*)",
+      "Bash(forge build:*)",
+      "Bash(forge test:*)"
     ],
     "deny": [],
     "ask": []

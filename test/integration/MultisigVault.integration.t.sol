@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.30;
 
 import "forge-std/Test.sol";
 import "../../src/MultisigVault.sol";
@@ -151,7 +151,7 @@ contract MultisigVaultIntegrationTest is Test {
         assertEq(bob.balance, 25 ether);
     }
     
-    function testFailedTransferScenarios() public {
+    function testRevertWhen_FailedTransferScenarios() public {
         // Scenario 1: Initiate transfer but never complete
         vm.prank(owner1);
         uint256 nonce1 = vault.initiateTransfer(alice, 10 ether);
