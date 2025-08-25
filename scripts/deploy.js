@@ -41,15 +41,21 @@ DEPLOYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf
     
     // Fund the owner wallets for gas
     console.log('\nFunding owner wallets...');
+    
+    // Get current nonce to avoid nonce issues
+    const currentNonce = await deployer.getNonce();
+    
     const tx1 = await deployer.sendTransaction({
         to: wallet1.address,
-        value: ethers.parseEther('1')
+        value: ethers.parseEther('1'),
+        nonce: currentNonce
     });
     await tx1.wait();
     
     const tx2 = await deployer.sendTransaction({
         to: wallet2.address,
-        value: ethers.parseEther('1')
+        value: ethers.parseEther('1'),
+        nonce: currentNonce + 1
     });
     await tx2.wait();
     
@@ -73,9 +79,11 @@ DEPLOYER_PRIVATE_KEY=0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf
     
     // Fund the vault with some ETH
     console.log('\nFunding vault with 10 ETH...');
+    const finalNonce = await deployer.getNonce();
     const fundTx = await deployer.sendTransaction({
         to: vaultAddress,
-        value: ethers.parseEther('10')
+        value: ethers.parseEther('10'),
+        nonce: finalNonce
     });
     await fundTx.wait();
     

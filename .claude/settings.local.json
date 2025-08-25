@@ -3,7 +3,8 @@
     "allow": [
       "Bash(forge init:*)",
       "Bash(forge build:*)",
-      "Bash(forge test:*)"
+      "Bash(forge test:*)",
+      "Bash(npm run build:*)"
     ],
     "deny": [],
     "ask": []
