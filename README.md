@@ -50,8 +50,6 @@ anvil
 
 ```bash
 npm run deploy
-# or
-node scripts/deploy.js
 ```
 
 This will:
