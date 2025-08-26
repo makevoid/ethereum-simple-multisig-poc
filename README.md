@@ -207,3 +207,9 @@ The contract is optimized for gas efficiency:
 ## License
 
 MIT
+
+## Contact me
+
+Say Hi on Twitter
+
+https://x.com/makevoid
