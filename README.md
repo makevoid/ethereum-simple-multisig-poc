@@ -18,7 +18,7 @@ The code inplements a 2/2 multi signature scheme in which two signatures are req
 1. **Owner1** initiates transfers
 2. **Owner2** reviews and signs transfer approval off-chain
 3. **Owner1** completes the transfer with Owner2's signature
-4. Contract verifies signature using ERC-1271 compatible (see previous commits for simpler ecrecover() based version)
+4. Contract verifies signature using ERC-1271 scheme (see previous commits for simpler ecrecover() based version)
 
 ## Prerequisites
 
