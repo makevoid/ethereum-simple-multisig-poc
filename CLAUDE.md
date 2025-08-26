@@ -14,7 +14,8 @@ This is an Ethereum multisig vault implementation using Foundry where ETH is sto
 
 ### Smart Contract (`src/MultisigVault.sol`)
 - Two immutable owners with distinct roles
-- Uses `ecrecover` for on-chain signature verification
+- Uses OpenZeppelin's `SignatureChecker` for ERC-1271 compatible signature verification
+- Supports both EOA and smart contract signers via ERC-1271 standard
 - Nonce-based replay protection via `transferNonce`
 - Custom errors for gas efficiency
 - Pending transfers stored in `mapping(uint256 => PendingTransfer)`
@@ -35,8 +36,11 @@ The system uses JSON files for off-chain coordination:
 
 ### Development Setup
 ```bash
-# Install dependencies
-forge install && npm install
+# Install Foundry dependencies (including OpenZeppelin)
+forge install
+
+# Install Node.js dependencies
+npm install
 
 # Build contracts
 npm run build
@@ -45,6 +49,19 @@ forge build
 
 # Start local blockchain (required for deployment/testing)
 anvil
+```
+
+### OpenZeppelin Setup
+The project uses OpenZeppelin contracts for ERC-1271 signature validation:
+
+```bash
+# Install OpenZeppelin Contracts (if not already installed)
+forge install OpenZeppelin/openzeppelin-contracts
+
+# OpenZeppelin is gitignored - make sure to install it after cloning
+# The contract imports used:
+# - @openzeppelin/contracts/interfaces/IERC1271.sol
+# - @openzeppelin/contracts/utils/cryptography/SignatureChecker.sol
 ```
 
 ### Testing
@@ -95,7 +112,7 @@ npm run user1:complete <nonce>
 The deployment script includes explicit nonce handling to avoid "nonce too low" errors when redeploying to fresh Anvil instances.
 
 ### Signature Format
-Owner2 signs using Ethereum's signed message format (`\x19Ethereum Signed Message:\n32`) and the contract expects v, r, s signature components for `ecrecover`.
+Owner2 signs using Ethereum's signed message format (`\x19Ethereum Signed Message:\n32`) and the contract uses OpenZeppelin's `SignatureChecker.isValidSignatureNow()` for validation, supporting both EOA signatures (via `ecrecover`) and smart contract signatures (via ERC-1271).
 
 ### Test Patterns
 Modern Foundry test naming: use `testRevertWhen_*` instead of deprecated `testFail*` patterns.

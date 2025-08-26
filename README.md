@@ -6,7 +6,8 @@ A traditional multisig vault implementation using Foundry, where ETH is stored d
 
 - **Two-Owner Multisig**: Requires both owners to authorize transfers
 - **Off-chain Signing**: Owner2 signs messages off-chain, reducing gas costs
-- **On-chain Verification**: Uses `ecrecover` to verify signatures
+- **ERC-1271 Compatible**: Uses OpenZeppelin's SignatureChecker for signature verification
+- **Smart Contract Support**: Supports both EOA and smart contract signers
 - **Direct ETH Storage**: Contract acts as a vault for ETH
 - **Comprehensive Testing**: Unit tests, integration tests, and JavaScript tests
 
@@ -15,7 +16,7 @@ A traditional multisig vault implementation using Foundry, where ETH is stored d
 1. **Owner1** initiates transfers
 2. **Owner2** reviews and signs transfer approval off-chain
 3. **Owner1** completes the transfer with Owner2's signature
-4. Contract verifies signature using `ecrecover` before executing
+4. Contract verifies signature using OpenZeppelin's SignatureChecker (ERC-1271 compatible)
 
 ## Prerequisites
 
@@ -26,12 +27,14 @@ A traditional multisig vault implementation using Foundry, where ETH is stored d
 ## Installation
 
 ```bash
-# Install Foundry dependencies
+# Install Foundry dependencies (including OpenZeppelin)
 forge install
 
 # Install Node.js dependencies
 npm install
 ```
+
+**Note**: This project uses OpenZeppelin Contracts which are installed via Forge and gitignored. After cloning, make sure to run `forge install` to get the required dependencies.
 
 ## Setup & Deployment
 
@@ -151,10 +154,11 @@ npm run test:watch
 ## Security Considerations
 
 1. **Private Key Management**: Store private keys securely, never commit `.env` to version control
-2. **Signature Verification**: All signatures are verified on-chain using `ecrecover`
-3. **Access Control**: Only Owner1 can initiate and complete transfers
-4. **Replay Protection**: Each transfer has a unique nonce
-5. **Balance Checks**: Contract verifies sufficient balance before transfers
+2. **Signature Verification**: All signatures are verified on-chain using OpenZeppelin's battle-tested SignatureChecker
+3. **ERC-1271 Support**: Supports both EOA signatures and smart contract signatures via ERC-1271 standard
+4. **Access Control**: Only Owner1 can initiate and complete transfers
+5. **Replay Protection**: Each transfer has a unique nonce
+6. **Balance Checks**: Contract verifies sufficient balance before transfers
 
 ## File Structure
 
