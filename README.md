@@ -11,7 +11,7 @@ The code inplements a 2/2 multi signature scheme in which two signatures are req
 - **ERC-1271 Compatible**: Uses OpenZeppelin's SignatureChecker for signature verification
 - **Smart Contract Support**: Supports both EOA and smart contract signers
 - **Direct ETH Storage**: Contract acts as a vault for ETH
--- **Comprehensive Testing**: Unit tests, integration tests, and JavaScript tests
+- **Comprehensive Testing**: Unit tests, integration tests, and JavaScript tests
 
 ## Architecture
 
