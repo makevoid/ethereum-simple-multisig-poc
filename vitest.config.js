@@ -2,11 +2,11 @@ import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
-    testTimeout: 60000,
-    hookTimeout: 60000,
+    testTimeout: 30000,
+    hookTimeout: 30000,
     globals: true,
     environment: 'node',
     setupFiles: [],
-    reporters: ['verbose']
+    reporters: [['default', { summary: false }]]
   }
 });

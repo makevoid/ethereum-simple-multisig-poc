@@ -92,37 +92,41 @@ Owner1 submits the signature to complete the transfer.
 
 ## Testing
 
-### Run All Tests
+### Unified Test Suite (Recommended)
+
+The project includes a unified test suite that runs both Solidity and JavaScript tests automatically:
 
 ```bash
-npm run test:all
+# Run complete test suite (Foundry + JavaScript)
+npm test
+# or
+npm run test:suite
 ```
 
-### Foundry Tests (Solidity)
+This will automatically:
+1. Build the contracts
+2. Start Anvil blockchain
+3. Run Foundry tests (22 Solidity tests)
+4. Run JavaScript integration test
+5. Stop Anvil and cleanup
+
+### Individual Test Commands
 
 ```bash
-# Run all Foundry tests
+# Foundry tests only (Solidity)
 npm run test:foundry
-# or
-forge test
-
-# Run with verbosity
 forge test -vvv
 
-# Run specific test
+# JavaScript tests only (requires Anvil running)
+npm run test:js
+
+# Specific Foundry test
 forge test --match-test testCompleteTransferWithValidSignature
 
 # Gas report
 forge test --gas-report
-```
 
-### JavaScript Integration Tests (Vitest)
-
-```bash
-# Run JavaScript tests (starts Anvil automatically)
-npm test
-
-# Watch mode
+# Watch mode for development
 npm run test:watch
 ```
 

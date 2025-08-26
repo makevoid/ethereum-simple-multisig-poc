@@ -49,21 +49,16 @@ anvil
 
 ### Testing
 ```bash
-# Run all tests (Foundry + JavaScript)
-npm run test:all
-
-# Run only Foundry tests
-npm run test:foundry
-forge test
-
-# Run specific test by name
-forge test --match-test testCompleteTransferWithValidSignature
-
-# Run JavaScript integration tests
+# Run unified test suite (builds contracts, starts Anvil, runs all tests, cleans up)
 npm test
+npm run test:suite
 
-# Gas reporting
-forge test --gas-report
+# Individual test commands
+npm run test:foundry    # Foundry tests only
+npm run test:js         # JavaScript tests only (requires Anvil)
+forge test             # Direct Foundry execution
+forge test --match-test testCompleteTransferWithValidSignature  # Specific test
+forge test --gas-report  # Gas usage analysis
 ```
 
 ### Deployment and Usage
