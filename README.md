@@ -2,6 +2,8 @@
 
 A traditional multisig vault implementation using Foundry, where ETH is stored directly in the contract and requires signatures from two owners to execute transfers.
 
+The code inplements a 2/2 multi signature scheme in which two signatures are required to unlock the funds managed by the smart contract.
+
 ## Features
 
 - **Two-Owner Multisig**: Requires both owners to authorize transfers
