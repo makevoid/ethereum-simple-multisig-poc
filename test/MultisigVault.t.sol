@@ -259,4 +259,33 @@ contract MultisigVaultTest is Test {
         
         assertEq(vault.transferNonce(), 1);
     }
+    
+    function testERC1271Validation() public {
+        uint256 amount = 1 ether;
+        
+        // Owner1 initiates transfer
+        vm.prank(owner1);
+        uint256 nonce = vault.initiateTransfer(recipient, amount);
+        
+        // Get the message to sign
+        bytes32 dataHash = vault.getMessageToSign(nonce);
+        
+        // Owner2 signs the message
+        bytes32 ethSignedMessageHash = vault.getEthSignedMessageHash(dataHash);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(owner2PrivateKey, ethSignedMessageHash);
+        
+        // Pack signature for ERC-1271
+        bytes memory signature = abi.encodePacked(r, s, v);
+        
+        // Test ERC-1271 validation
+        bytes4 result = vault.isValidSignature(dataHash, signature);
+        assertEq(uint32(result), uint32(0x1626ba7e), "ERC-1271 should return magic value for valid signature");
+        
+        // Test with invalid signature (signed by owner1 instead of owner2)
+        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(owner1PrivateKey, ethSignedMessageHash);
+        bytes memory invalidSignature = abi.encodePacked(r2, s2, v2);
+        
+        bytes4 invalidResult = vault.isValidSignature(dataHash, invalidSignature);
+        assertEq(uint32(invalidResult), uint32(0xffffffff), "ERC-1271 should return invalid for wrong signer");
+    }
 }

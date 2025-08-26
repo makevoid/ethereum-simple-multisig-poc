@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
-contract MultisigVault {
+import {IERC1271} from "@openzeppelin/contracts/interfaces/IERC1271.sol";
+import {SignatureChecker} from "@openzeppelin/contracts/utils/cryptography/SignatureChecker.sol";
+
+contract MultisigVault is IERC1271 {
     address public immutable owner1;
     address public immutable owner2;
     
@@ -19,6 +22,9 @@ contract MultisigVault {
     event TransferInitiated(uint256 indexed nonce, address indexed to, uint256 amount, bytes32 dataHash);
     event TransferCompleted(uint256 indexed nonce, address indexed to, uint256 amount);
     event Deposit(address indexed from, uint256 amount);
+    
+    // ERC-1271 magic value
+    bytes4 private constant MAGIC_VALUE = 0x1626ba7e;
     
     error OnlyOwner1();
     error OnlyOwners();
@@ -113,11 +119,16 @@ contract MultisigVault {
         if (transfer.completed) revert TransferAlreadyCompleted();
         if (address(this).balance < transfer.amount) revert InsufficientBalance();
         
-        // Verify signature from owner2
-        bytes32 messageHash = getEthSignedMessageHash(transfer.dataHash);
-        address signer = ecrecover(messageHash, v, r, s);
+        // Pack signature for validation
+        bytes memory signature = abi.encodePacked(r, s, v);
         
-        if (signer != owner2) revert InvalidSignature();
+        // Create the message hash that was actually signed (Ethereum signed message format)
+        bytes32 ethSignedHash = getEthSignedMessageHash(transfer.dataHash);
+        
+        // Verify signature from owner2 (supports both EOA and smart contract signatures)
+        if (!_isValidSignatureFrom(owner2, ethSignedHash, signature)) {
+            revert InvalidSignature();
+        }
         
         transfer.completed = true;
         
@@ -143,5 +154,31 @@ contract MultisigVault {
         PendingTransfer memory transfer = pendingTransfers[nonce];
         require(transfer.initiated, "Transfer not initiated");
         return transfer.dataHash;
+    }
+    
+    /**
+     * @dev Internal function to validate signatures from a specific signer (supports ERC-1271)
+     * @param signer Address that should have signed the message
+     * @param hash Hash of the data that was signed
+     * @param signature Signature bytes
+     * @return True if signature is valid from the specified signer
+     */
+    function _isValidSignatureFrom(address signer, bytes32 hash, bytes memory signature) internal view returns (bool) {
+        // Use OpenZeppelin's SignatureChecker which handles both EOA and ERC-1271 signatures
+        return SignatureChecker.isValidSignatureNow(signer, hash, signature);
+    }
+
+    /**
+     * @dev ERC-1271 implementation: Validates signatures for this contract
+     * @param hash Hash of the data that was signed
+     * @param signature Signature bytes (65 bytes for ECDSA: r+s+v)
+     * @return magicValue 0x1626ba7e if signature is valid, 0xffffffff otherwise
+     */
+    function isValidSignature(bytes32 hash, bytes memory signature) external view override returns (bytes4) {
+        // Create the Ethereum signed message hash for consistent validation
+        bytes32 ethSignedHash = getEthSignedMessageHash(hash);
+        
+        // Only allow owner2 to provide valid signatures for this contract
+        return _isValidSignatureFrom(owner2, ethSignedHash, signature) ? MAGIC_VALUE : bytes4(0xffffffff);
     }
 }

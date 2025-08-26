@@ -13,7 +13,8 @@
       "Bash(chmod:*)",
       "Bash(npm run test:suite:*)",
       "Bash(node:*)",
-      "Bash(node:*)"
+      "Bash(node:*)",
+      "Bash(forge install:*)"
     ],
     "deny": [],
     "ask": []
