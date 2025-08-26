@@ -48,8 +48,8 @@ async function runTestSuite() {
         // Step 3: Run Foundry tests
         console.log('\n🧪 Running Foundry Tests (Solidity)...');
         try {
-            await execAsync('forge test -vvv');
-            console.log('✅ Foundry tests passed');
+            const { stdout } = await execAsync('forge test');
+            console.log(stdout);
         } catch (error) {
             console.error('❌ Foundry tests failed:', error.message);
             throw error;
@@ -58,8 +58,8 @@ async function runTestSuite() {
         // Step 4: Run JavaScript tests  
         console.log('\n🧪 Running JavaScript Tests...');
         try {
-            await execAsync('npx vitest run test-js/multisig.test.js');
-            console.log('✅ JavaScript tests passed');
+            const { stdout } = await execAsync('npx vitest run test-js/multisig.test.js');
+            console.log(stdout);
         } catch (error) {
             console.error('❌ JavaScript tests failed:', error.message);
             throw error;
