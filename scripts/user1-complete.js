@@ -1,13 +1,5 @@
+import { MultisigClient } from '../lib/MultisigClient.js';
 import { ethers } from 'ethers';
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import dotenv from 'dotenv';
-
-dotenv.config();
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 async function main() {
     // Parse arguments
@@ -17,96 +9,65 @@ async function main() {
         process.exit(1);
     }
     
-    const nonce = args[0];
+    const nonce = parseInt(args[0]);
     
-    // Load signature file
-    const signatureFile = `signature-${nonce}.json`;
-    if (!fs.existsSync(signatureFile)) {
-        console.error(`Signature file not found: ${signatureFile}`);
-        console.error('Please run user2-sign.js first');
+    console.log('🚀 Completing multisig transfer...\n');
+    
+    try {
+        const client = new MultisigClient();
+        
+        // Load environment and deployment info
+        const env = client.loadEnv();
+        const deployment = client.loadDeployment();
+        
+        // Create Owner1 wallet and connect to contract
+        const owner1Wallet = client.createWallet(env.OWNER1_PRIVATE_KEY);
+        await client.connect(deployment.contractAddress, owner1Wallet);
+        
+        // Load transfer and signature data
+        const transferData = client.loadTransfer(nonce);
+        const signatureData = client.loadSignature(nonce);
+        
+        console.log('📋 Transfer summary:');
+        console.log(`🔢 Nonce: ${transferData.nonce}`);
+        console.log(`📍 Recipient: ${transferData.recipient}`);
+        console.log(`💸 Amount: ${transferData.amount} ETH`);
+        console.log(`✍️  Signed by: ${signatureData.signer}\n`);
+        
+        // Get current balances
+        const vaultBalanceBefore = await client.getBalance();
+        const recipientBalanceBefore = await client.provider.getBalance(transferData.recipient);
+        
+        console.log('💰 Balances before transfer:');
+        console.log(`🏦 Vault: ${ethers.formatEther(vaultBalanceBefore)} ETH`);
+        console.log(`👤 Recipient: ${ethers.formatEther(recipientBalanceBefore)} ETH\n`);
+        
+        // Complete the transfer
+        const result = await client.completeTransfer(owner1Wallet, nonce, signatureData.signature);
+        
+        console.log('✅ Transfer completed successfully!');
+        console.log(`📋 Transaction hash: ${result.tx.hash}\n`);
+        
+        // Get updated balances
+        const vaultBalanceAfter = await client.getBalance();
+        const recipientBalanceAfter = await client.provider.getBalance(transferData.recipient);
+        
+        console.log('💰 Balances after transfer:');
+        console.log(`🏦 Vault: ${ethers.formatEther(vaultBalanceAfter)} ETH`);
+        console.log(`👤 Recipient: ${ethers.formatEther(recipientBalanceAfter)} ETH\n`);
+        
+        // Update transfer data to mark as completed
+        transferData.completed = true;
+        transferData.completionTxHash = result.tx.hash;
+        transferData.completionTimestamp = new Date().toISOString();
+        client.saveTransfer(nonce, transferData);
+        
+        console.log('🎉 Multisig transfer workflow completed successfully!');
+        
+    } catch (error) {
+        console.error('❌ Error:', error.message);
         process.exit(1);
     }
-    
-    const signatureData = JSON.parse(fs.readFileSync(signatureFile, 'utf8'));
-    
-    // Connect to provider
-    const provider = new ethers.JsonRpcProvider('http://127.0.0.1:8545');
-    
-    // Get owner1 wallet
-    const owner1 = new ethers.Wallet(process.env.OWNER1_PRIVATE_KEY, provider);
-    console.log('Using Owner1:', owner1.address);
-    
-    // Load deployment info
-    const deployment = JSON.parse(fs.readFileSync('deployment.json', 'utf8'));
-    
-    // Load contract ABI
-    const contractPath = path.join(__dirname, '../out/MultisigVault.sol/MultisigVault.json');
-    const contractJson = JSON.parse(fs.readFileSync(contractPath, 'utf8'));
-    
-    // Connect to contract
-    const vault = new ethers.Contract(
-        deployment.vaultAddress,
-        contractJson.abi,
-        owner1
-    );
-    
-    // Get transfer details
-    console.log('\nFetching transfer details...');
-    const details = await vault.getTransferDetails(nonce);
-    const [to, amount, dataHash, initiated, completed] = details;
-    
-    if (!initiated) {
-        console.error('Transfer not initiated');
-        process.exit(1);
-    }
-    
-    if (completed) {
-        console.error('Transfer already completed');
-        process.exit(1);
-    }
-    
-    console.log('Transfer to:', to);
-    console.log('Amount:', ethers.formatEther(amount), 'ETH');
-    
-    // Check recipient balance before
-    const balanceBefore = await provider.getBalance(to);
-    console.log('\nRecipient balance before:', ethers.formatEther(balanceBefore), 'ETH');
-    
-    // Complete the transfer with signature
-    console.log('\nCompleting transfer with Owner2 signature...');
-    
-    const tx = await vault.completeTransfer(
-        nonce,
-        signatureData.signature.v,
-        signatureData.signature.r,
-        signatureData.signature.s
-    );
-    
-    console.log('Transaction submitted:', tx.hash);
-    
-    const receipt = await tx.wait();
-    console.log('Transaction confirmed!');
-    
-    // Check recipient balance after
-    const balanceAfter = await provider.getBalance(to);
-    console.log('\nRecipient balance after:', ethers.formatEther(balanceAfter), 'ETH');
-    console.log('Amount received:', ethers.formatEther(balanceAfter - balanceBefore), 'ETH');
-    
-    // Update transfer file
-    const transferFile = `transfer-${nonce}.json`;
-    if (fs.existsSync(transferFile)) {
-        const transferInfo = JSON.parse(fs.readFileSync(transferFile, 'utf8'));
-        transferInfo.status = 'completed';
-        transferInfo.completedTxHash = receipt.hash;
-        transferInfo.completedAt = new Date().toISOString();
-        fs.writeFileSync(transferFile, JSON.stringify(transferInfo, null, 2));
-    }
-    
-    // Check vault balance
-    const vaultBalance = await vault.getBalance();
-    console.log('\nVault balance remaining:', ethers.formatEther(vaultBalance), 'ETH');
-    
-    console.log('\n✅ Transfer completed successfully!');
 }
 
 main()

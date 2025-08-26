@@ -11,7 +11,9 @@
       "Bash(npm test)",
       "Bash(npm run test:all:*)",
       "Bash(chmod:*)",
-      "Bash(npm run test:suite:*)"
+      "Bash(npm run test:suite:*)",
+      "Bash(node:*)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []
