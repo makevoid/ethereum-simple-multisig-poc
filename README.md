@@ -199,6 +199,11 @@ The contract is optimized for gas efficiency:
 - Efficient storage layout using mappings
 - Minimal state changes per transaction
 
+## Improvements as next steps
+
+- Try to add a third user / account that can sign the transaction 
+- Change the scheme of the multisig to be 2/3 (two users required in a 3 users multisig setup)
+
 ## License
 
 MIT
