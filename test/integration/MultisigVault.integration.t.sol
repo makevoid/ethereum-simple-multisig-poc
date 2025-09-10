@@ -47,24 +47,25 @@ contract MultisigVaultIntegrationTest is Test {
         uint256 nonce = vault.initiateTransfer(alice, transferAmount);
         
         // Verify transfer is pending
-        (address to, uint256 amount, , bool initiated, bool completed) = vault.getTransferDetails(nonce);
+        (address to, uint256 amount, , bool initiated, bool completed, bool cancelled) = vault.getTransferDetails(nonce);
         assertEq(to, alice);
         assertEq(amount, transferAmount);
         assertTrue(initiated);
         assertFalse(completed);
+        assertFalse(cancelled);
         
         // Step 2: Owner2 retrieves transfer details and signs
         bytes32 messageToSign = vault.getMessageToSign(nonce);
-        bytes32 ethSignedHash = vault.getEthSignedMessageHash(messageToSign);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(owner2PrivateKey, ethSignedHash);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(owner2PrivateKey, messageToSign);
         
         // Step 3: Owner1 completes transfer with signature
         vm.prank(owner1);
         vault.completeTransfer(nonce, v, r, s);
         
         // Verify transfer completed
-        (, , , , bool completedAfter) = vault.getTransferDetails(nonce);
+        (, , , , bool completedAfter, bool cancelledAfter) = vault.getTransferDetails(nonce);
         assertTrue(completedAfter);
+        assertFalse(cancelledAfter);
         assertEq(alice.balance, aliceInitialBalance + transferAmount);
         assertEq(vault.getBalance(), 95 ether);
     }
@@ -99,8 +100,7 @@ contract MultisigVaultIntegrationTest is Test {
             uint256 idx = order[i];
             
             bytes32 messageToSign = vault.getMessageToSign(nonces[idx]);
-            bytes32 ethSignedHash = vault.getEthSignedMessageHash(messageToSign);
-            (uint8 v, bytes32 r, bytes32 s) = vm.sign(owner2PrivateKey, ethSignedHash);
+            (uint8 v, bytes32 r, bytes32 s) = vm.sign(owner2PrivateKey, messageToSign);
             
             vm.prank(owner1);
             vault.completeTransfer(nonces[idx], v, r, s);
@@ -129,7 +129,7 @@ contract MultisigVaultIntegrationTest is Test {
         uint256 nonce1 = vault.initiateTransfer(alice, 75 ether);
         
         bytes32 msg1 = vault.getMessageToSign(nonce1);
-        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(owner2PrivateKey, vault.getEthSignedMessageHash(msg1));
+        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(owner2PrivateKey, msg1);
         
         vm.prank(owner1);
         vault.completeTransfer(nonce1, v1, r1, s1);
@@ -142,7 +142,7 @@ contract MultisigVaultIntegrationTest is Test {
         uint256 nonce2 = vault.initiateTransfer(bob, 25 ether);
         
         bytes32 msg2 = vault.getMessageToSign(nonce2);
-        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(owner2PrivateKey, vault.getEthSignedMessageHash(msg2));
+        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(owner2PrivateKey, msg2);
         
         vm.prank(owner1);
         vault.completeTransfer(nonce2, v2, r2, s2);
@@ -173,11 +173,36 @@ contract MultisigVaultIntegrationTest is Test {
         assertEq(vault.getBalance(), 100 ether);
         
         // Verify transfers are still pending
-        (, , , bool initiated1, bool completed1) = vault.getTransferDetails(nonce1);
-        (, , , bool initiated2, bool completed2) = vault.getTransferDetails(nonce2);
+        (, , , bool initiated1, bool completed1, bool cancelled1) = vault.getTransferDetails(nonce1);
+        (, , , bool initiated2, bool completed2, bool cancelled2) = vault.getTransferDetails(nonce2);
         
-        assertTrue(initiated1 && !completed1);
-        assertTrue(initiated2 && !completed2);
+        assertTrue(initiated1 && !completed1 && !cancelled1);
+        assertTrue(initiated2 && !completed2 && !cancelled2);
+    }
+    
+    function testCancelTransfer() public {
+        uint256 transferAmount = 5 ether;
+        address aliceLocal = makeAddr("alice");
+        
+        // Step 1: Owner1 initiates transfer
+        vm.prank(owner1);
+        uint256 nonce = vault.initiateTransfer(aliceLocal, transferAmount);
+        
+        // Verify transfer is pending
+        (address to, uint256 amount, , bool initiated, bool completed, bool cancelled) = vault.getTransferDetails(nonce);
+        assertTrue(initiated && !completed && !cancelled);
+        
+        // Step 2: Owner1 cancels transfer (either owner can cancel)
+        vm.prank(owner1);
+        vault.cancelTransfer(nonce);
+        
+        // Verify transfer is cancelled
+        (, , , , , bool cancelledAfter) = vault.getTransferDetails(nonce);
+        assertTrue(cancelledAfter);
+        
+        // Verify funds remain in vault
+        assertEq(aliceLocal.balance, 0);
+        assertEq(vault.getBalance(), 100 ether);
     }
     
     function testEmergencyScenarios() public {
@@ -190,7 +215,7 @@ contract MultisigVaultIntegrationTest is Test {
         
         // Complete first transfer
         bytes32 msg1 = vault.getMessageToSign(nonce1);
-        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(owner2PrivateKey, vault.getEthSignedMessageHash(msg1));
+        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(owner2PrivateKey, msg1);
         
         vm.prank(owner1);
         vault.completeTransfer(nonce1, v1, r1, s1);
@@ -199,7 +224,7 @@ contract MultisigVaultIntegrationTest is Test {
         
         // Try to complete second transfer (should fail due to insufficient balance)
         bytes32 msg2 = vault.getMessageToSign(nonce2);
-        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(owner2PrivateKey, vault.getEthSignedMessageHash(msg2));
+        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(owner2PrivateKey, msg2);
         
         vm.prank(owner1);
         vm.expectRevert(MultisigVault.InsufficientBalance.selector);
@@ -223,7 +248,7 @@ contract MultisigVaultIntegrationTest is Test {
         uint256 nonce1 = vault.initiateTransfer(alice, 1 ether);
         
         bytes32 msg1 = vault.getMessageToSign(nonce1);
-        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(owner2PrivateKey, vault.getEthSignedMessageHash(msg1));
+        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(owner2PrivateKey, msg1);
         
         gasBefore = gasleft();
         vm.prank(owner1);
@@ -237,7 +262,7 @@ contract MultisigVaultIntegrationTest is Test {
         uint256 nonce2 = vault.initiateTransfer(bob, 1 ether);
         
         bytes32 msg2 = vault.getMessageToSign(nonce2);
-        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(owner2PrivateKey, vault.getEthSignedMessageHash(msg2));
+        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(owner2PrivateKey, msg2);
         
         gasBefore = gasleft();
         vm.prank(owner1);

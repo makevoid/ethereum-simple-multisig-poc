@@ -14,6 +14,7 @@ contract MultisigVault is IERC1271 {
         bytes32 dataHash;
         bool initiated;
         bool completed;
+        bool cancelled;
     }
     
     mapping(uint256 => PendingTransfer) public pendingTransfers;
@@ -21,6 +22,7 @@ contract MultisigVault is IERC1271 {
     
     event TransferInitiated(uint256 indexed nonce, address indexed to, uint256 amount, bytes32 dataHash);
     event TransferCompleted(uint256 indexed nonce, address indexed to, uint256 amount);
+    event TransferCancelled(uint256 indexed nonce, address indexed to, uint256 amount);
     event Deposit(address indexed from, uint256 amount);
     
     // ERC-1271 magic value
@@ -31,9 +33,13 @@ contract MultisigVault is IERC1271 {
     error InvalidSignature();
     error TransferNotInitiated();
     error TransferAlreadyCompleted();
+    error TransferAlreadyCancelled();
     error InsufficientBalance();
     error InvalidAmount();
     error InvalidAddress();
+    error InvalidOwner();
+    error OwnersCannotBeSame();
+    error TransferFailed();
     
     modifier onlyOwner1() {
         if (msg.sender != owner1) revert OnlyOwner1();
@@ -46,9 +52,8 @@ contract MultisigVault is IERC1271 {
     }
     
     constructor(address _owner1, address _owner2) {
-        require(_owner1 != address(0), "Invalid owner1");
-        require(_owner2 != address(0), "Invalid owner2");
-        require(_owner1 != _owner2, "Owners must be different");
+        if (_owner1 == address(0) || _owner2 == address(0)) revert InvalidOwner();
+        if (_owner1 == _owner2) revert OwnersCannotBeSame();
         
         owner1 = _owner1;
         owner2 = _owner2;
@@ -82,7 +87,8 @@ contract MultisigVault is IERC1271 {
             amount: amount,
             dataHash: dataHash,
             initiated: true,
-            completed: false
+            completed: false,
+            cancelled: false
         });
         
         emit TransferInitiated(nonce, to, amount, dataHash);
@@ -95,7 +101,8 @@ contract MultisigVault is IERC1271 {
         uint256 amount,
         bytes32 dataHash,
         bool initiated,
-        bool completed
+        bool completed,
+        bool cancelled
     ) {
         PendingTransfer memory transfer = pendingTransfers[nonce];
         return (
@@ -103,7 +110,8 @@ contract MultisigVault is IERC1271 {
             transfer.amount,
             transfer.dataHash,
             transfer.initiated,
-            transfer.completed
+            transfer.completed,
+            transfer.cancelled
         );
     }
     
@@ -117,6 +125,7 @@ contract MultisigVault is IERC1271 {
         
         if (!transfer.initiated) revert TransferNotInitiated();
         if (transfer.completed) revert TransferAlreadyCompleted();
+        if (transfer.cancelled) revert TransferAlreadyCancelled();
         if (address(this).balance < transfer.amount) revert InsufficientBalance();
         
         // Pack signature for validation
@@ -134,9 +143,21 @@ contract MultisigVault is IERC1271 {
         
         // Execute transfer
         (bool success, ) = transfer.to.call{value: transfer.amount}("");
-        require(success, "Transfer failed");
+        if (!success) revert TransferFailed();
         
         emit TransferCompleted(nonce, transfer.to, transfer.amount);
+    }
+    
+    function cancelTransfer(uint256 nonce) external onlyOwners {
+        PendingTransfer storage transfer = pendingTransfers[nonce];
+        
+        if (!transfer.initiated) revert TransferNotInitiated();
+        if (transfer.completed) revert TransferAlreadyCompleted();
+        if (transfer.cancelled) revert TransferAlreadyCancelled();
+        
+        transfer.cancelled = true;
+        
+        emit TransferCancelled(nonce, transfer.to, transfer.amount);
     }
     
     function getEthSignedMessageHash(bytes32 messageHash) public pure returns (bytes32) {
@@ -152,8 +173,9 @@ contract MultisigVault is IERC1271 {
     
     function getMessageToSign(uint256 nonce) external view returns (bytes32) {
         PendingTransfer memory transfer = pendingTransfers[nonce];
-        require(transfer.initiated, "Transfer not initiated");
-        return transfer.dataHash;
+        if (!transfer.initiated) revert TransferNotInitiated();
+        if (transfer.cancelled) revert TransferAlreadyCancelled();
+        return getEthSignedMessageHash(transfer.dataHash);
     }
     
     /**
@@ -170,15 +192,22 @@ contract MultisigVault is IERC1271 {
 
     /**
      * @dev ERC-1271 implementation: Validates signatures for this contract
-     * @param hash Hash of the data that was signed
+     * @param hash Hash of the data that was signed (accepts both raw and prefixed hashes)
      * @param signature Signature bytes (65 bytes for ECDSA: r+s+v)
      * @return magicValue 0x1626ba7e if signature is valid, 0xffffffff otherwise
      */
     function isValidSignature(bytes32 hash, bytes memory signature) external view override returns (bytes4) {
-        // Create the Ethereum signed message hash for consistent validation
-        bytes32 ethSignedHash = getEthSignedMessageHash(hash);
+        // Try validating the hash as-is (for already prefixed hashes from external protocols)
+        if (_isValidSignatureFrom(owner2, hash, signature)) {
+            return MAGIC_VALUE;
+        }
         
-        // Only allow owner2 to provide valid signatures for this contract
-        return _isValidSignatureFrom(owner2, ethSignedHash, signature) ? MAGIC_VALUE : bytes4(0xffffffff);
+        // Try validating with Ethereum signed message prefix (for raw message hashes)
+        bytes32 ethSignedHash = getEthSignedMessageHash(hash);
+        if (_isValidSignatureFrom(owner2, ethSignedHash, signature)) {
+            return MAGIC_VALUE;
+        }
+        
+        return bytes4(0xffffffff);
     }
 }

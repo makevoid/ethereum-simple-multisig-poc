@@ -40,13 +40,13 @@ contract MultisigVaultTest is Test {
     }
     
     function testConstructorRevertsWithInvalidOwners() public {
-        vm.expectRevert("Invalid owner1");
+        vm.expectRevert(MultisigVault.InvalidOwner.selector);
         new MultisigVault(address(0), owner2);
         
-        vm.expectRevert("Invalid owner2");
+        vm.expectRevert(MultisigVault.InvalidOwner.selector);
         new MultisigVault(owner1, address(0));
         
-        vm.expectRevert("Owners must be different");
+        vm.expectRevert(MultisigVault.OwnersCannotBeSame.selector);
         new MultisigVault(owner1, owner1);
     }
     
@@ -90,13 +90,14 @@ contract MultisigVaultTest is Test {
         
         assertEq(nonce, 0);
         
-        (address to, uint256 transferAmount, bytes32 dataHash, bool initiated, bool completed) = 
+        (address to, uint256 transferAmount, bytes32 dataHash, bool initiated, bool completed, bool cancelled) = 
             vault.getTransferDetails(nonce);
         
         assertEq(to, recipient);
         assertEq(transferAmount, amount);
         assertTrue(initiated);
         assertFalse(completed);
+        assertFalse(cancelled);
         assertTrue(dataHash != bytes32(0));
     }
     
@@ -132,12 +133,11 @@ contract MultisigVaultTest is Test {
         vm.prank(owner1);
         uint256 nonce = vault.initiateTransfer(recipient, amount);
         
-        // Get the message to sign
-        bytes32 dataHash = vault.getMessageToSign(nonce);
+        // Get the message to sign (already hashed with Ethereum prefix)
+        bytes32 messageToSign = vault.getMessageToSign(nonce);
         
         // Owner2 signs the message
-        bytes32 ethSignedMessageHash = vault.getEthSignedMessageHash(dataHash);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(owner2PrivateKey, ethSignedMessageHash);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(owner2PrivateKey, messageToSign);
         
         uint256 recipientBalanceBefore = recipient.balance;
         
@@ -151,9 +151,10 @@ contract MultisigVaultTest is Test {
         assertEq(recipient.balance, recipientBalanceBefore + amount);
         assertEq(vault.getBalance(), 9 ether);
         
-        (, , , bool initiated, bool completed) = vault.getTransferDetails(nonce);
+        (, , , bool initiated, bool completed, bool cancelled) = vault.getTransferDetails(nonce);
         assertTrue(initiated);
         assertTrue(completed);
+        assertFalse(cancelled);
     }
     
     function testCompleteTransferInvalidSignature() public {
@@ -190,9 +191,8 @@ contract MultisigVaultTest is Test {
         vm.prank(owner1);
         uint256 nonce = vault.initiateTransfer(recipient, amount);
         
-        bytes32 dataHash = vault.getMessageToSign(nonce);
-        bytes32 ethSignedMessageHash = vault.getEthSignedMessageHash(dataHash);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(owner2PrivateKey, ethSignedMessageHash);
+        bytes32 messageToSign = vault.getMessageToSign(nonce);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(owner2PrivateKey, messageToSign);
         
         vm.prank(owner1);
         vault.completeTransfer(nonce, v, r, s);
@@ -209,9 +209,8 @@ contract MultisigVaultTest is Test {
         vm.prank(owner1);
         uint256 nonce = vault.initiateTransfer(recipient, amount);
         
-        bytes32 dataHash = vault.getMessageToSign(nonce);
-        bytes32 ethSignedMessageHash = vault.getEthSignedMessageHash(dataHash);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(owner2PrivateKey, ethSignedMessageHash);
+        bytes32 messageToSign = vault.getMessageToSign(nonce);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(owner2PrivateKey, messageToSign);
         
         vm.prank(owner2);
         vm.expectRevert(MultisigVault.OnlyOwner1.selector);
@@ -230,17 +229,15 @@ contract MultisigVaultTest is Test {
         vm.stopPrank();
         
         // Complete first transfer
-        bytes32 dataHash1 = vault.getMessageToSign(nonce1);
-        bytes32 ethSignedMessageHash1 = vault.getEthSignedMessageHash(dataHash1);
-        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(owner2PrivateKey, ethSignedMessageHash1);
+        bytes32 messageToSign1 = vault.getMessageToSign(nonce1);
+        (uint8 v1, bytes32 r1, bytes32 s1) = vm.sign(owner2PrivateKey, messageToSign1);
         
         vm.prank(owner1);
         vault.completeTransfer(nonce1, v1, r1, s1);
         
         // Complete second transfer
-        bytes32 dataHash2 = vault.getMessageToSign(nonce2);
-        bytes32 ethSignedMessageHash2 = vault.getEthSignedMessageHash(dataHash2);
-        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(owner2PrivateKey, ethSignedMessageHash2);
+        bytes32 messageToSign2 = vault.getMessageToSign(nonce2);
+        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(owner2PrivateKey, messageToSign2);
         
         vm.prank(owner1);
         vault.completeTransfer(nonce2, v2, r2, s2);
@@ -267,25 +264,24 @@ contract MultisigVaultTest is Test {
         vm.prank(owner1);
         uint256 nonce = vault.initiateTransfer(recipient, amount);
         
-        // Get the message to sign
-        bytes32 dataHash = vault.getMessageToSign(nonce);
+        // Get the message to sign (already hashed with Ethereum prefix)
+        bytes32 messageToSign = vault.getMessageToSign(nonce);
         
         // Owner2 signs the message
-        bytes32 ethSignedMessageHash = vault.getEthSignedMessageHash(dataHash);
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(owner2PrivateKey, ethSignedMessageHash);
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(owner2PrivateKey, messageToSign);
         
         // Pack signature for ERC-1271
         bytes memory signature = abi.encodePacked(r, s, v);
         
         // Test ERC-1271 validation
-        bytes4 result = vault.isValidSignature(dataHash, signature);
+        bytes4 result = vault.isValidSignature(messageToSign, signature);
         assertEq(uint32(result), uint32(0x1626ba7e), "ERC-1271 should return magic value for valid signature");
         
         // Test with invalid signature (signed by owner1 instead of owner2)
-        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(owner1PrivateKey, ethSignedMessageHash);
+        (uint8 v2, bytes32 r2, bytes32 s2) = vm.sign(owner1PrivateKey, messageToSign);
         bytes memory invalidSignature = abi.encodePacked(r2, s2, v2);
         
-        bytes4 invalidResult = vault.isValidSignature(dataHash, invalidSignature);
+        bytes4 invalidResult = vault.isValidSignature(messageToSign, invalidSignature);
         assertEq(uint32(invalidResult), uint32(0xffffffff), "ERC-1271 should return invalid for wrong signer");
     }
 }
